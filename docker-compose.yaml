@@ -116,7 +116,7 @@ services:
       airflow-init:
         condition: service_completed_successfully
 
-  # Roda uma vez: migra o banco, cria o usuário da UI, a Connection e sai.
+  # Roda uma vez: migra o banco, cria o usuário da UI, a Connection, o Pool e sai.
   airflow-init:
     <<: *airflow-common
     entrypoint: /bin/bash
@@ -135,6 +135,7 @@ services:
           --conn-password dw \
           --conn-schema shopbrasil \
           --conn-description "Base analítica da ShopBrasil"
+        airflow pools set ecommerce_pool 2 "Limita as tasks mapeadas por categoria"
     environment:
       <<: *airflow-common-env
       _AIRFLOW_DB_MIGRATE: 'true'
