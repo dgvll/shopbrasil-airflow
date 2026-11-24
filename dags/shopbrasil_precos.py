@@ -11,12 +11,12 @@ import logging
 from datetime import timedelta
 
 import pendulum
-from airflow.sdk import dag, task, task_group
+from airflow.sdk import dag, get_current_context, task, task_group
 
 from shopbrasil import banco, metricas
 from shopbrasil.api import ErroApiCatalogo, buscar_produtos_api
 from shopbrasil.callbacks import ao_concluir_task, ao_falhar_task, ao_retentar_task
-from shopbrasil.config import TIMEZONE
+from shopbrasil.config import POOL_CATEGORIAS, TIMEZONE
 
 log = logging.getLogger(__name__)
 
@@ -71,7 +71,19 @@ def shopbrasil_precos_categoria():
         preparar_tabelas() >> produtos
         return agrupar_por_categoria(produtos)
 
-    ingestao()
+    @task_group(group_id="analise")
+    def analise(grupos):
+        """Fan-out: uma task por categoria (Dynamic Task Mapping), limitada pelo pool."""
+
+        @task(pool=POOL_CATEGORIAS, map_index_template="{{ categoria }}")
+        def calcular_metricas(grupo: dict) -> dict:
+            # Mostra o nome da categoria no lugar do índice na UI.
+            get_current_context()["categoria"] = grupo["categoria"]
+            return metricas.calcular_metricas(grupo["categoria"], grupo["precos"])
+
+        return calcular_metricas.expand(grupo=grupos)
+
+    analise(ingestao())
 
 
 shopbrasil_precos_categoria()
