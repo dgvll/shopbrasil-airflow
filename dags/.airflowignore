@@ -1,0 +1,2 @@
+# Pacote de apoio: é importado pelo DAG, não precisa ser lido pelo dag-processor.
+shopbrasil/
