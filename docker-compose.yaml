@@ -31,6 +31,8 @@ x-airflow-common: &airflow-common
   depends_on: &airflow-common-depends-on
     postgres:
       condition: service_healthy
+    postgres-dw:
+      condition: service_healthy
 
 services:
   # Banco de metadados do Airflow
@@ -44,6 +46,24 @@ services:
       - postgres-meta:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    restart: always
+
+  # Base analítica (destino do pipeline). Exposta em localhost:5433 para inspeção.
+  postgres-dw:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: dw
+      POSTGRES_PASSWORD: dw
+      POSTGRES_DB: shopbrasil
+    volumes:
+      - postgres-dw:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "dw", "-d", "shopbrasil"]
       interval: 10s
       retries: 5
       start_period: 5s
@@ -96,7 +116,7 @@ services:
       airflow-init:
         condition: service_completed_successfully
 
-  # Roda uma vez: migra o banco, cria o usuário da UI e sai.
+  # Roda uma vez: migra o banco, cria o usuário da UI, a Connection e sai.
   airflow-init:
     <<: *airflow-common
     entrypoint: /bin/bash
@@ -106,6 +126,15 @@ services:
         mkdir -p /opt/airflow/logs
         chown -R "${AIRFLOW_UID:-50000}:0" /opt/airflow/logs
         /entrypoint airflow version
+        airflow connections delete postgres_dw > /dev/null 2>&1 || true
+        airflow connections add postgres_dw \
+          --conn-type postgres \
+          --conn-host postgres-dw \
+          --conn-port 5432 \
+          --conn-login dw \
+          --conn-password dw \
+          --conn-schema shopbrasil \
+          --conn-description "Base analítica da ShopBrasil"
     environment:
       <<: *airflow-common-env
       _AIRFLOW_DB_MIGRATE: 'true'
@@ -129,3 +158,4 @@ services:
 
 volumes:
   postgres-meta:
+  postgres-dw:
