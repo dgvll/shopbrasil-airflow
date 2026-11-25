@@ -8,7 +8,7 @@ na base analítica (PostgreSQL).
 """
 
 import logging
-from datetime import timedelta
+from datetime import date, timedelta
 
 import pendulum
 from airflow.sdk import dag, get_current_context, task, task_group
@@ -19,6 +19,17 @@ from shopbrasil.callbacks import ao_concluir_task, ao_falhar_task, ao_retentar_t
 from shopbrasil.config import POOL_CATEGORIAS, TIMEZONE
 
 log = logging.getLogger(__name__)
+
+
+def _data_referencia() -> date:
+    """Data (horário de Brasília) que a run representa.
+
+    Runs agendadas usam a logical_date; runs manuais disparadas pela API podem
+    não ter logical_date no Airflow 3, então usamos o run_after.
+    """
+    context = get_current_context()
+    momento = context.get("logical_date") or context["dag_run"].run_after
+    return pendulum.instance(momento).in_timezone(TIMEZONE).date()
 
 
 @dag(
@@ -97,7 +108,20 @@ def shopbrasil_precos_categoria():
 
         return consolidar_metricas(calcular_metricas.expand(grupo=grupos))
 
-    analise(ingestao())
+    @task_group(group_id="persistencia")
+    def persistencia(linhas):
+        """Grava o resultado na base analítica."""
+
+        @task
+        def salvar_snapshot(linhas: list[dict], run_id=None) -> int:
+            data_referencia = _data_referencia()
+            total = banco.salvar_snapshot(data_referencia, linhas, run_id)
+            log.info("Snapshot de %s gravado: %d categorias", data_referencia, total)
+            return total
+
+        salvar_snapshot(linhas)
+
+    persistencia(analise(ingestao()))
 
 
 shopbrasil_precos_categoria()
