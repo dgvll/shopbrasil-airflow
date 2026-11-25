@@ -121,7 +121,15 @@ def shopbrasil_precos_categoria():
             log.info("Snapshot de %s gravado: %d categorias", data_referencia, total)
             return total
 
+        @task
+        def salvar_historico(linhas: list[dict], run_id=None) -> int:
+            data_referencia = _data_referencia()
+            total = banco.inserir_historico(data_referencia, linhas, run_id)
+            log.info("Histórico de %s acrescentado: %d linhas", data_referencia, total)
+            return total
+
         salvar_snapshot(linhas)
+        salvar_historico(linhas)
 
     persistencia(analise(ingestao()))
 
