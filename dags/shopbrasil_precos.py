@@ -73,7 +73,7 @@ def shopbrasil_precos_categoria():
 
     @task_group(group_id="analise")
     def analise(grupos):
-        """Fan-out: uma task por categoria (Dynamic Task Mapping), limitada pelo pool."""
+        """Fan-out por categoria (Dynamic Task Mapping) e fan-in na consolidação."""
 
         @task(pool=POOL_CATEGORIAS, map_index_template="{{ categoria }}")
         def calcular_metricas(grupo: dict) -> dict:
@@ -81,7 +81,21 @@ def shopbrasil_precos_categoria():
             get_current_context()["categoria"] = grupo["categoria"]
             return metricas.calcular_metricas(grupo["categoria"], grupo["precos"])
 
-        return calcular_metricas.expand(grupo=grupos)
+        @task
+        def consolidar_metricas(resultados) -> list[dict]:
+            linhas = metricas.consolidar(list(resultados))
+            for linha in linhas:
+                log.info(
+                    "%-20s qtd=%-3d médio=%9.2f mín=%9.2f máx=%9.2f",
+                    linha["categoria"],
+                    linha["qtd_produtos"],
+                    linha["preco_medio"],
+                    linha["preco_minimo"],
+                    linha["preco_maximo"],
+                )
+            return linhas
+
+        return consolidar_metricas(calcular_metricas.expand(grupo=grupos))
 
     analise(ingestao())
 

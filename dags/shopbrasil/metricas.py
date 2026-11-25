@@ -37,3 +37,16 @@ def calcular_metricas(categoria: str, precos: list[float]) -> dict:
         "preco_minimo": _arredondar(min(precos)),
         "preco_maximo": _arredondar(max(precos)),
     }
+
+
+def consolidar(resultados: list[dict]) -> list[dict]:
+    """Junta as métricas de todas as categorias em uma lista ordenada.
+
+    Falha se a mesma categoria aparecer duas vezes, o que indicaria um erro
+    no agrupamento e geraria dados inconsistentes no painel.
+    """
+    linhas = sorted(resultados, key=lambda linha: linha["categoria"])
+    categorias = [linha["categoria"] for linha in linhas]
+    if len(categorias) != len(set(categorias)):
+        raise ValueError(f"Categorias duplicadas na consolidação: {categorias}")
+    return linhas
