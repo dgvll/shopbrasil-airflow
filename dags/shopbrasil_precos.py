@@ -17,6 +17,7 @@ from shopbrasil import banco, metricas
 from shopbrasil.api import ErroApiCatalogo, buscar_produtos_api
 from shopbrasil.callbacks import ao_concluir_task, ao_falhar_task, ao_retentar_task
 from shopbrasil.config import POOL_CATEGORIAS, TIMEZONE
+from shopbrasil.operators import ValidarProdutosOperator
 
 log = logging.getLogger(__name__)
 
@@ -50,7 +51,7 @@ def _data_referencia() -> date:
 def shopbrasil_precos_categoria():
     @task_group(group_id="ingestao")
     def ingestao():
-        """Linear: preparar tabelas -> buscar produtos -> agrupar por categoria."""
+        """Linear: preparar tabelas -> buscar -> validar -> agrupar por categoria."""
 
         @task
         def preparar_tabelas() -> None:
@@ -80,7 +81,8 @@ def shopbrasil_precos_categoria():
 
         produtos = buscar_produtos()
         preparar_tabelas() >> produtos
-        return agrupar_por_categoria(produtos)
+        validados = ValidarProdutosOperator(task_id="validar_produtos", produtos=produtos)
+        return agrupar_por_categoria(validados.output)
 
     @task_group(group_id="analise")
     def analise(grupos):
