@@ -11,7 +11,7 @@ import logging
 from datetime import date, timedelta
 
 import pendulum
-from airflow.sdk import dag, get_current_context, task, task_group
+from airflow.sdk import Param, dag, get_current_context, task, task_group
 
 from shopbrasil import banco, metricas
 from shopbrasil.api import ErroApiCatalogo, buscar_produtos_api
@@ -51,6 +51,13 @@ def _data_referencia() -> date:
         "retry_delay": timedelta(minutes=1),
     },
     on_failure_callback=alertar_falha_dag,
+    params={
+        "simular_falha": Param(
+            False,
+            type="boolean",
+            description="Força erro na coleta para demonstrar retries, callbacks e alerta.",
+        ),
+    },
     tags=["shopbrasil", "precos", "ecommerce"],
     doc_md=__doc__,
 )
@@ -72,8 +79,10 @@ def shopbrasil_precos_categoria():
             on_retry_callback=ao_retentar_task,
             on_failure_callback=ao_falhar_task,
         )
-        def buscar_produtos() -> list[dict]:
+        def buscar_produtos(params=None) -> list[dict]:
             try:
+                if params and params.get("simular_falha"):
+                    raise ErroApiCatalogo("Falha simulada pelo parâmetro simular_falha")
                 return buscar_produtos_api()
             except ErroApiCatalogo:
                 log.exception("Não foi possível buscar os produtos; o Airflow tentará novamente")
