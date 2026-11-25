@@ -15,7 +15,12 @@ from airflow.sdk import dag, get_current_context, task, task_group
 
 from shopbrasil import banco, metricas
 from shopbrasil.api import ErroApiCatalogo, buscar_produtos_api
-from shopbrasil.callbacks import ao_concluir_task, ao_falhar_task, ao_retentar_task
+from shopbrasil.callbacks import (
+    alertar_falha_dag,
+    ao_concluir_task,
+    ao_falhar_task,
+    ao_retentar_task,
+)
 from shopbrasil.config import POOL_CATEGORIAS, TIMEZONE
 from shopbrasil.operators import ValidarProdutosOperator
 
@@ -45,6 +50,7 @@ def _data_referencia() -> date:
         "retries": 1,
         "retry_delay": timedelta(minutes=1),
     },
+    on_failure_callback=alertar_falha_dag,
     tags=["shopbrasil", "precos", "ecommerce"],
     doc_md=__doc__,
 )

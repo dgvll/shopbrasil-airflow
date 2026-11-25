@@ -44,3 +44,18 @@ def ao_falhar_task(context) -> None:
         "Falha na coleta de produtos",
         f"{descricao} | erro: {context.get('exception')}",
     )
+
+
+def alertar_falha_dag(context) -> None:
+    """on_failure_callback do DAG: qualquer falha na run gera um alerta.
+
+    Garante que o time de pricing não fique sem dados de manhã sem que
+    ninguém saiba. No Airflow 3 este callback roda no dag-processor.
+    """
+    dag_run = context.get("dag_run")
+    dag_id = getattr(dag_run, "dag_id", None) or getattr(context.get("dag"), "dag_id", "?")
+    run_id = getattr(dag_run, "run_id", None) or context.get("run_id", "?")
+    enviar_alerta(
+        "Pipeline de preços falhou",
+        f"dag={dag_id} run={run_id} motivo={context.get('reason', 'task falhou')}",
+    )
